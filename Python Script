@@ -1,0 +1,92 @@
+# Import necessary modules for the script functionality.
+import secrets  # Used for secure random number generation.
+import string  # Contains constants for string operations, like ASCII letters.
+import os  # Provides access to operating system dependent functionality, like random bytes.
+import base64  # Provides data encoding functionality necessary for encoding the encryption key.
+from cryptography.fernet import Fernet  # Symmetric encryption/decryption using Fernet.
+from cryptography.hazmat.primitives import hashes  # Cryptographic hashing.
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC  # Key derivation function.
+
+# Function to get a numeric input from the user.
+def get_numeric_input(prompt, max_value=None):
+    while True:  # Start an infinite loop to repeatedly prompt the user.
+        try:
+            value = int(input(prompt))  # Try converting the input to an integer.
+            if max_value and value > max_value:  # Check if there's a maximum value specified and if the input exceeds it.
+                print(f"Value must not exceed {max_value}.")  # Inform the user of the maximum value constraint.
+            else:
+                return value  # If input is valid, return the value and exit the loop.
+        except ValueError:  # Catch the ValueError if conversion to integer fails.
+            print("Please enter a valid number.")  # Ask the user to input a valid number.
+
+# Function to get a passphrase from the user for encryption.
+def get_secure_passphrase(prompt):
+    return input(prompt).encode()  # Prompt the user for a passphrase and encode it to bytes.
+
+# Function to generate a list of passwords.
+def generate_passwords(count, length, chars):
+    # Use a list comprehension to generate 'count' passwords.
+    return [''.join(secrets.choice(chars) for _ in range(length)) for _ in range(count)]
+
+# Function to derive an encryption key from the passphrase and salt.
+def derive_key(passphrase, salt):
+    # Use PBKDF2 HMAC as the key derivation function.
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),  # Use SHA256 for hashing.
+        length=32,  # Desired length of the derived key.
+        salt=salt,  # Use the provided salt.
+        iterations=100000,  # Number of iterations to perform.
+    )
+    # Derive the key and return it encoded in base64.
+    return base64.urlsafe_b64encode(kdf.derive(passphrase))
+
+# Function to encrypt a list of passwords.
+def encrypt_passwords(passwords, key):
+    fernet = Fernet(key)  # Create a Fernet object with the encryption key.
+    # Encrypt each password and return a list of encrypted passwords.
+    return [fernet.encrypt(password.encode()) for password in passwords]
+
+# Function to decrypt a list of encrypted passwords.
+def decrypt_passwords(encrypted_passwords, key):
+    fernet = Fernet(key)  # Create a Fernet object with the encryption key.
+    # Decrypt each password and return a list of decrypted passwords.
+    return [fernet.decrypt(password).decode() for password in encrypted_passwords]
+
+# Main function of the script.
+def main():
+    # Constants for password generation.
+    MAX_LENGTH = 50  # Maximum length of the passwords.
+    SPECIAL_CHARS = string.punctuation  # String of special characters to include in the password.
+    CHARS = string.ascii_letters + string.digits + SPECIAL_CHARS  # Allowed characters for the password.
+    
+    # Get user input for the number and length of passwords.
+    count = get_numeric_input("How many passwords? ")
+    length = get_numeric_input("Length of each password? ", max_value=MAX_LENGTH)
+    # Prompt the user for a secure passphrase for encryption.
+    passphrase = get_secure_passphrase("Enter a secure passphrase for encryption: ")
+    
+    # Generate a random salt for key derivation.
+    salt = os.urandom(16)
+    # Derive an encryption key from the passphrase and salt.
+    key = derive_key(passphrase, salt)
+    
+    # Generate a list of passwords.
+    passwords = generate_passwords(count, length, CHARS)
+    # Encrypt the generated passwords.
+    encrypted_passwords = encrypt_passwords(passwords, key)
+    
+    # Print out the passwords and their encrypted versions.
+    print("\nGenerated Passwords:")
+    for password in passwords:
+        print(password)
+    
+    print("\nEncrypted Passwords:")
+    for encrypted_password in encrypted_passwords:
+        print(encrypted_password.decode())
+    
+    # Print out the salt used in key derivation. It is essential for decryption.
+    print(f"\nSalt (save this to decrypt your passwords later): {salt.hex()}")
+
+# Check if the script is being run directly, and if so, call the main function.
+if __name__ == '__main__':
+    main()
